@@ -44,7 +44,7 @@ class DMM6500:
         self.r.write(self._sense_prefix() + f'NPLC {nplc}')
 
     def measure(self):
-        return self.r.query(':MEAS?')
+        return float(self.r.query(':MEAS?'))
 
     def _sense_prefix(self):
         if self.last_selected_function is None:
