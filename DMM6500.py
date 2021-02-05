@@ -1,56 +1,69 @@
+from typing import Union
+
 import pyvisa as visa
-from enum import Enum
+
+import DMM6500_SCPI
 
 
-class Function(Enum):
-    DC_VOLTAGE = 'VOLT:DC'
-    AC_VOLTAGE = 'VOLT:AC'
-    DC_CURRENT = 'CURR:DC'
-    AC_CURRENT = 'CURR:AC'
-    RESISTANCE = 'RES'
-    FOUR_WIRE_RESISTANCE = 'FRES'
-    DIODE = 'DIO'
-    CAPACITANCE = 'CAP'
-    TEMPERATURE = 'TEMP'
-    CONTINUITY = 'CON'
-    FREQUENCY = 'FREQ'
-    PERIOD = 'PER'
-    VOLTAGE_RATIO = 'VOLT:RAT'
+class DummyVisaResource:
+    @staticmethod
+    def write(txt):
+        print(f'scpi write: {txt}')
+
+    @staticmethod
+    def query(txt):
+        print(f'scpi query: {txt}')
+        return ""
+
+
+MMResourceType = Union[visa.Resource, DummyVisaResource]
 
 
 class DMM6500:
-
-    def __init__(self, resource: visa.Resource):
+    def __init__(self, resource: MMResourceType):
         self.r = resource
         self.last_selected_function = None
 
-    def reset(self):
-        self.r.write('*RST')
+    def __setattr__(self, key: str, value):
+        if key == 'function':
+            self.last_selected_function = value
 
-    def set_function(self, func: Function):
-        self.r.write(f':SENS:FUNC "{_scpi_func_name(func)}"')
-        self.last_selected_function = func
+        set_query_name = f'set_{key}'
+        if set_query_name in DMM6500_SCPI.all_query_templates:
+            _, cmd = DMM6500_SCPI.query_text(DMM6500_SCPI.all_query_templates[set_query_name],
+                                             self.last_selected_function, [value])
+            self.r.write(cmd)
+        else:
+            self.__dict__[key] = value
 
-    def set_range(self, max_expected_value: float):
-        self.r.write(self._sense_prefix() + f'RANG {max_expected_value}')
+    def __getattr__(self, key: str):
+        if key in DMM6500_SCPI.all_query_templates:
+            return lambda *args: do_query(self.r, key, self.last_selected_function, args)
 
-    def set_auto_range(self, yes=True):
-        self.r.write(self._sense_prefix() + f'RANG:AUTO {1 if yes else 0}')
+    def apply_settings(self, settings_dict: dict):
+        if 'function' in settings_dict:
+            self.__setattr__('function', settings_dict['function'])
+            settings_dict.pop('function')
 
-    def set_auto_zero(self, yes=True):
-        self.r.write(self._sense_prefix() + f'AZER {1 if yes else 0}')
+        for key, val in settings_dict.items():
+            self.__setattr__(key, val)
 
-    def set_nplc(self, nplc: float):
-        self.r.write(self._sense_prefix() + f'NPLC {nplc}')
+    def get_all_errors(self):
+        err = self.system_error_next()
+        all_errors = []
+        while err[0] != 0:
+            all_errors.append(err)
+            err = self.system_error_next()
 
-    def measure(self):
-        return float(self.r.query(':MEAS?'))
-
-    def _sense_prefix(self):
-        if self.last_selected_function is None:
-            raise Exception("No function selected yet")
-        return f':SENS:{_scpi_func_name(self.last_selected_function)}:'
+        return all_errors
 
 
-def _scpi_func_name(func: Function):
-    return func.value
+def do_query(r: MMResourceType, template_name, mm_state, args):
+    method, cmd = DMM6500_SCPI.query_text(DMM6500_SCPI.all_query_templates[template_name], mm_state, args)
+    if method == 'write':
+        r.write(cmd)
+        return None
+    elif method == 'query':
+        return r.query(cmd)
+    else:
+        assert False
