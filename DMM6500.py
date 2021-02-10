@@ -30,9 +30,7 @@ class DMM6500:
 
         set_query_name = f'set_{key}'
         if set_query_name in DMM6500_SCPI.all_query_templates:
-            _, cmd = DMM6500_SCPI.query_text(DMM6500_SCPI.all_query_templates[set_query_name],
-                                             self.last_selected_function, [value])
-            self.r.write(cmd)
+            do_query(self.r, set_query_name, self.last_selected_function, [value])
         else:
             self.__dict__[key] = value
 
@@ -59,11 +57,12 @@ class DMM6500:
 
 
 def do_query(r: MMResourceType, template_name, mm_state, args):
-    method, cmd = DMM6500_SCPI.query_text(DMM6500_SCPI.all_query_templates[template_name], mm_state, args)
+    method, cmd, return_convert = DMM6500_SCPI.query_text(DMM6500_SCPI.all_query_templates[template_name], mm_state, args)
     if method == 'write':
         r.write(cmd)
         return None
     elif method == 'query':
-        return r.query(cmd)
+        convert = return_convert if return_convert is not None else lambda x: x
+        return convert(r.query(cmd))
     else:
         assert False

@@ -104,7 +104,6 @@ def query_text(template, mm_state, values):
         param_info = inspect.signature(formt).parameters
         requires_mm_state = 'mm_func' in param_info
         no_required_args = len(param_info) - (1 if requires_mm_state else 0)
-
     else:
         requires_mm_state = formt.count('{mm_func}') == 1
         no_required_args = formt.count('{') - (1 if requires_mm_state else 0)
@@ -127,11 +126,11 @@ def query_text(template, mm_state, values):
 
     if isinstance(formt, Callable):
         if requires_mm_state:
-            return query_type, formt(*converted_values, mm_func=mm_state)
+            return query_type, formt(*converted_values, mm_func=mm_state), return_convert
         else:
-            return query_type, formt(*converted_values)
+            return query_type, formt(*converted_values), return_convert
     else:
-        return query_type, formt.format(*converted_values, mm_func=mm_state)
+        return query_type, formt.format(*converted_values, mm_func=mm_state), return_convert
 
 
 all_query_templates = _combined_queries(query_templates, sense_queries)
