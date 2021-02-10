@@ -7,8 +7,8 @@ try:
     rm = visa.ResourceManager()
     mm = DMM6500(rm.open_resource('USB::0x05e6::0x6500::*******::INSTR'))
 except ValueError:
-    print('Could not connect to multimeter for example. Using virtual dummy multimeter')
-    mm = DMM6500(DummyVisaResource())
+    print('Could not connect to multimeter for example.')
+    exit(1)
 
 mm.reset()
 mm.set_function(Function.DC_VOLTAGE)
